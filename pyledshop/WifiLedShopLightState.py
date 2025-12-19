@@ -19,7 +19,8 @@ class WifiLedShopLightState:
       """
 
   def update_from_sync(self, sync_data):
-    self.is_on = sync_data[StatePosition.IS_ON]
+    # Convert numeric value to boolean properly
+    self.is_on = bool(sync_data[StatePosition.IS_ON])
     self.color = (
       sync_data[StatePosition.COLOR_R],
       sync_data[StatePosition.COLOR_G],

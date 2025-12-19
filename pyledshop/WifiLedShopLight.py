@@ -3,7 +3,7 @@ import logging
 import asyncio
 from time import sleep
 from .effects import MONO_EFFECTS, PRESET_EFFECTS
-from .constants import Command, CommandFlag
+from .constants import Command, CommandFlag, StatePosition
 from .utils import clamp
 from .WifiLedShopLightState import WifiLedShopLightState
 
@@ -40,10 +40,6 @@ class WifiLedShopLight(LightEntity):
         self._update_lock = asyncio.Lock()
         self._brightness_task = None  # For debouncing brightness changes
         self._command_lock = asyncio.Lock()  # Prevent concurrent commands
-        self._desired_brightness = None  # Source of truth for brightness
-        self._desired_state = None  # Source of truth for on/off state
-        self._desired_color = None  # Source of truth for color
-        self._desired_effect = None  # Source of truth for effect
 
         self._attr_name = name
         self._attr_supported_color_modes = {ColorMode.RGB}
@@ -73,37 +69,14 @@ class WifiLedShopLight(LightEntity):
         r, g, b = clamp(r), clamp(g), clamp(b)
         target = (r, g, b)
 
-        # Send the color command once
+        # Send the color command
         self.send_command(Command.SET_COLOR, [r, g, b])
-        self._desired_color = target
+        # Update state optimistically
         self._state.color = target
-
-        # Best-effort verification: read back state once and, if the color
-        # does not match what we requested, resend the command a second time.
-        try:
-            response = self.send_command(Command.SYNC, [])
-            if response:
-                verify_state = WifiLedShopLightState()
-                verify_state.update_from_sync(bytearray(response))
-                if verify_state.color != target:
-                    _LOGGER.debug(
-                        "Color verification mismatch (got %s, expected %s); resending",
-                        verify_state.color,
-                        target,
-                    )
-                    self.send_command(Command.SET_COLOR, [r, g, b])
-                    self._desired_color = target
-                    self._state.color = target
-        except Exception as e:
-            # If verification fails (timeout, etc.), don't break the flow –
-            # we already sent the color command once.
-            _LOGGER.debug("Color verification failed: %s", e)
 
     def set_brightness(self, brightness=0):
         brightness = clamp(brightness)
         self.send_command(Command.SET_BRIGHTNESS, [brightness])
-        # Set as source of truth - this is what we want
-        self._desired_brightness = brightness
         # Update state optimistically for immediate feedback
         self._state.brightness = brightness
 
@@ -126,8 +99,6 @@ class WifiLedShopLight(LightEntity):
         # Don't clamp preset values - they can be 0-212
         # MonoEffect values are 205-212, PRESET_EFFECTS are 0-195
         self.send_command(Command.SET_PRESET, [preset])
-        # Set as source of truth - this is what we want
-        self._desired_effect = effect
         # Update state optimistically for immediate feedback
         self._state.mode = preset
         # If brightness is provided with effect, set it too
@@ -147,35 +118,29 @@ class WifiLedShopLight(LightEntity):
                           None means just toggle once.
         """
         if desired_state is not None:
-            # Toggle until we reach desired state
-            max_attempts = 3
-            for attempt in range(max_attempts):
+            # Get current state first
+            current_state = False
+            try:
+                response = self.send_command(Command.SYNC, [])
+                if response:
+                    current_state = bool(bytearray(response)[StatePosition.IS_ON])
+            except Exception as e:
+                _LOGGER.debug("Failed to get current state before toggle: %s", e)
+                # Assume opposite of desired state to force toggle
+                current_state = not desired_state
+            
+            # Only toggle if current state doesn't match desired state
+            if current_state != desired_state:
                 self.send_command(Command.TOGGLE, [])
-                # Small delay to let device process
-                sleep(0.1)
-                # Check if we need to toggle again
-                if attempt < max_attempts - 1:
-                    # Sync to check actual state
-                    try:
-                        response = self.send_command(Command.SYNC, [])
-                        if response:
-                            actual_state = bytearray(response)[1]  # IS_ON position
-                            if bool(actual_state) == desired_state:
-                                break
-                    except:
-                        pass
+                sleep(0.15)  # Give device time to process
+                # Update state optimistically
+                self._state.is_on = desired_state
         else:
             # Just toggle once
             self.send_command(Command.TOGGLE, [])
-        
-        # Update desired state as source of truth
-        if desired_state is not None:
-            self._desired_state = desired_state
-            self._state.is_on = desired_state
-        else:
-            # Toggle desired state
-            self._desired_state = not self._state.is_on if self._desired_state is None else not self._desired_state
-            self._state.is_on = self._desired_state
+            sleep(0.1)
+            # Toggle the known state
+            self._state.is_on = not self._state.is_on
 
     async def _sync_state(self):
         """Force sync state from device."""
@@ -187,29 +152,18 @@ class WifiLedShopLight(LightEntity):
             return
 
         async with self._command_lock:
-            # 1) Determine current on/off state from device/desired state
-            if self._desired_state is None:
-                await self._sync_state()
-            is_on = (
-                self._desired_state
-                if self._desired_state is not None
-                else self._state.is_on
-            )
+            # 1) Get current state from device
+            await self._sync_state()
+            is_on = self._state.is_on
 
             # 2) If off, turn on first so subsequent commands are applied while on
             if not is_on:
                 await self._hass.async_add_executor_job(self._toggle_sync, True)
-                self._desired_state = True
-                self._state.is_on = True
                 self.async_write_ha_state()
 
             # 3) Process all provided parameters
             #    Handle brightness separately (including *_pct and *_step variants)
-            current_brightness = (
-                self._desired_brightness
-                if self._desired_brightness is not None
-                else self._state.brightness
-            )
+            current_brightness = self._state.brightness
 
             brightness_value = None
             if ATTR_BRIGHTNESS in kwargs and kwargs[ATTR_BRIGHTNESS] is not None:
@@ -337,7 +291,6 @@ class WifiLedShopLight(LightEntity):
                     self.async_write_ha_state()
 
             # Ensure internal state reflects on
-            self._desired_state = True
             self._state.is_on = True
             self.async_write_ha_state()
 
@@ -347,22 +300,17 @@ class WifiLedShopLight(LightEntity):
             return
         
         async with self._command_lock:
-            # Check current state (use desired state if available, otherwise sync)
-            if self._desired_state is None:
-                await self._sync_state()
-            is_on = self._desired_state if self._desired_state is not None else self._state.is_on
+            # Get current state from device
+            await self._sync_state()
+            is_on = self._state.is_on
             
-            # Set desired state as source of truth
-            self._desired_state = False
-            
-            # Turn off if it's on - use toggle with desired state
+            # Turn off if it's on
             if is_on:
                 await self._hass.async_add_executor_job(self._toggle_sync, False)
-                self.async_write_ha_state()
-            else:
-                # Already off, but update state to reflect desired state
-                self._state.is_on = False
-                self.async_write_ha_state()
+            
+            # Update state to reflect off
+            self._state.is_on = False
+            self.async_write_ha_state()
 
     def set_segments(self, segments):
         self.send_command(Command.SET_SEGMENT_COUNT, [segments])
@@ -447,24 +395,10 @@ class WifiLedShopLight(LightEntity):
                     self.send_command, Command.SYNC, []
                 )
                 if response:
-                    # Update state from device
+                    # Update state from device - this is now the source of truth
                     self._state.update_from_sync(bytearray(response))
-                    
-                    # Use desired values as source of truth (don't let sync override)
-                    if self._desired_state is not None:
-                        self._state.is_on = self._desired_state
-                    
-                    if self._desired_brightness is not None:
-                        self._state.brightness = self._desired_brightness
-                    
-                    if self._desired_color is not None:
-                        self._state.color = self._desired_color
-                    
-                    if self._desired_effect is not None:
-                        # Update mode from desired effect
-                        both = {**MONO_EFFECTS, **PRESET_EFFECTS}
-                        if self._desired_effect in both:
-                            self._state.mode = both[self._desired_effect]
+                    _LOGGER.debug("State updated from device: is_on=%s, brightness=%s, color=%s", 
+                                 self._state.is_on, self._state.brightness, self._state.color)
             except Exception as e:
                 _LOGGER.warning("Failed to update state: %s", e)
 
