@@ -23,10 +23,9 @@ import homeassistant.util.color as color_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class WifiLedShopLight(LightEntity):
     """A Wifi LED Shop Light."""
-
+    
     def __init__(self, ip, name, config, port=8189, timeout=3, retries=5):
         self._ip = ip
         self._default_effect = config.get("effect", "Solid (custom color)")
@@ -42,8 +41,8 @@ class WifiLedShopLight(LightEntity):
         self._command_lock = asyncio.Lock()  # Prevent concurrent commands
 
         self._attr_name = name
-        self._attr_supported_color_modes = {ColorMode.RGB}
-        self._attr_color_mode = ColorMode.RGB
+        self._attr_supported_color_modes = {ColorMode.RGBW}
+        self._attr_color_mode = ColorMode.RGBW
         self._attr_supported_features = LightEntityFeature.EFFECT
 
         # Try to get unique_id, but fall back to IP-based ID if connection fails
@@ -63,7 +62,8 @@ class WifiLedShopLight(LightEntity):
         return self
 
     def __exit__(self, type, value, traceback):
-        self._sock.close()
+        if self._sock:
+            self._sock.close()
 
     def set_color(self, r=0, g=0, b=0):
         r, g, b = clamp(r), clamp(g), clamp(b)
@@ -84,11 +84,13 @@ class WifiLedShopLight(LightEntity):
         white = clamp(white)
         self.send_command(Command.SET_WHITE, [white])
         # Don't update state optimistically - let sync handle it
+        # This behavior could cause HomeAssistant to trigger a double update. Maybe it's better to do it Async
 
     def set_speed(self, speed=0):
         speed = clamp(speed)
         self.send_command(Command.SET_SPEED, [speed])
         # Don't update state optimistically - let sync handle it
+        # This behavior could cause HomeAssistant to trigger a double update. Maybe it's better to do it Async
 
     def set_effect(self, effect, brightness=None):
         both = {**MONO_EFFECTS, **PRESET_EFFECTS}
@@ -182,7 +184,7 @@ class WifiLedShopLight(LightEntity):
 
             # 2) If off, turn on first so subsequent commands are applied while on
             if not is_on:
-                await self._hass.async_add_executor_job(self._toggle_sync, True)
+                await self._hass.async_add_executor_job(self._toggle_sync, None)
                 # Brief pause and sync to ensure state is correct after turning on
                 await asyncio.sleep(0.1)
                 await self._sync_state()
@@ -333,7 +335,7 @@ class WifiLedShopLight(LightEntity):
             
             # Turn off if it's on
             if is_on:
-                await self._hass.async_add_executor_job(self._toggle_sync, False)
+                await self._hass.async_add_executor_job(self._toggle_sync, None)
                 # Brief pause and then sync to ensure state is correct
                 await asyncio.sleep(0.1)
                 await self._sync_state()
