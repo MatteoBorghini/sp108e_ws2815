@@ -175,6 +175,7 @@ class WifiLedShopLight(LightEntity):
     async def async_turn_on(self, **kwargs):
         """Turn on the light with optional parameters (async)."""
         if self._hass is None:
+            _LOGGER.error('Cannot determine HASS instance! Cannot continue further.')
             return
 
         async with self._command_lock:
@@ -186,8 +187,10 @@ class WifiLedShopLight(LightEntity):
             if not is_on:
                 await self._hass.async_add_executor_job(self._toggle_sync, None)
                 # Brief pause and sync to ensure state is correct after turning on
-                await asyncio.sleep(0.1)
-                await self._sync_state()
+                # ! _sync_state should not be called here since is already been done by _toggle_sync.
+                # ! Re-doing it here only adds more lag to the HA write value and could end up in a concurrency state
+                # await asyncio.sleep(0.1)
+                # await self._sync_state()
                 self.async_write_ha_state()
 
             # 3) Process all provided parameters
@@ -297,6 +300,7 @@ class WifiLedShopLight(LightEntity):
                         try:
                             await self._brightness_task
                         except asyncio.CancelledError:
+                            _LOGGER.debug('Cancelled the previous unfinished brightness event...')
                             pass
                     
                     # Optimistic update for immediate UI feedback
@@ -326,6 +330,7 @@ class WifiLedShopLight(LightEntity):
     async def async_turn_off(self, **kwargs):
         """Turn off the light (async)."""
         if self._hass is None:
+            _LOGGER.error('Cannot determine HASS instance! Cannot continue further.')
             return
         
         async with self._command_lock:
@@ -337,14 +342,18 @@ class WifiLedShopLight(LightEntity):
             if is_on:
                 await self._hass.async_add_executor_job(self._toggle_sync, None)
                 # Brief pause and then sync to ensure state is correct
-                await asyncio.sleep(0.1)
-                await self._sync_state()
+                # ! _sync_state should not be called here since is already been done by _toggle_sync.
+                # ! Re-doing it here only adds more lag to the HA write value and could end up in a concurrency state
+                # await asyncio.sleep(0.1)
+                # await self._sync_state()
             
+            # todo - Maybe this should be INSIDE the if statement. Investigate further
             # Ensure state reflects off and notify Home Assistant immediately
             self._state.is_on = False
             self.async_write_ha_state()
             
             # Force another update to ensure UI is refreshed
+            # todo - WHY??? is there a valid reason I'm not seeing??
             await asyncio.sleep(0.05)
             self.async_write_ha_state()
 
@@ -424,6 +433,7 @@ class WifiLedShopLight(LightEntity):
     async def async_update(self):
         """Update state from device (async for Home Assistant)."""
         if self._hass is None:
+            _LOGGER.error('Cannot determine HASS instance! Cannot continue further.')
             return
         async with self._update_lock:
             try:
@@ -437,8 +447,7 @@ class WifiLedShopLight(LightEntity):
                     
                     # Update state from device - this is now the source of truth
                     self._state.update_from_sync(bytearray(response))
-                    _LOGGER.debug("State updated from device: is_on=%s, brightness=%s, color=%s", 
-                                 self._state.is_on, self._state.brightness, self._state.color)
+                    _LOGGER.debug("State updated from device: is_on=%s, brightness=%s, color=%s", self._state.is_on, self._state.brightness, self._state.color)
                     
                     # If state changed significantly, force UI update
                     if (old_is_on != self._state.is_on or 
