@@ -135,8 +135,19 @@ class WifiLedShopLight(LightEntity):
                 _LOGGER.debug("Toggling light from %s to %s", current_state, desired_state)
                 self.send_command(Command.TOGGLE, [])
                 sleep(0.15)  # Give device time to process
-                # Update state optimistically
-                self._state.is_on = desired_state
+                
+                # Verify the toggle worked by syncing again
+                try:
+                    response = self.send_command(Command.SYNC, [])
+                    if response:
+                        self._state.update_from_sync(bytearray(response))
+                    else:
+                        # Fallback to optimistic update
+                        self._state.is_on = desired_state
+                except Exception as e:
+                    _LOGGER.debug("Failed to verify toggle: %s", e)
+                    # Fallback to optimistic update
+                    self._state.is_on = desired_state
             else:
                 _LOGGER.debug("Light already in desired state %s, no toggle needed", desired_state)
                 self._state.is_on = desired_state
@@ -145,8 +156,15 @@ class WifiLedShopLight(LightEntity):
             _LOGGER.debug("Toggling light (no specific desired state)")
             self.send_command(Command.TOGGLE, [])
             sleep(0.1)
-            # Toggle the known state
-            self._state.is_on = not self._state.is_on
+            # Try to sync actual state
+            try:
+                response = self.send_command(Command.SYNC, [])
+                if response:
+                    self._state.update_from_sync(bytearray(response))
+            except Exception as e:
+                _LOGGER.debug("Failed to sync after toggle: %s", e)
+                # Fallback to optimistic toggle
+                self._state.is_on = not self._state.is_on
 
     async def _sync_state(self):
         """Force sync state from device."""
@@ -320,8 +338,12 @@ class WifiLedShopLight(LightEntity):
                 await asyncio.sleep(0.1)
                 await self._sync_state()
             
-            # Always update state to reflect off and notify Home Assistant
+            # Ensure state reflects off and notify Home Assistant immediately
             self._state.is_on = False
+            self.async_write_ha_state()
+            
+            # Force another update to ensure UI is refreshed
+            await asyncio.sleep(0.05)
             self.async_write_ha_state()
 
     def set_segments(self, segments):
@@ -407,10 +429,20 @@ class WifiLedShopLight(LightEntity):
                     self.send_command, Command.SYNC, []
                 )
                 if response:
+                    # Store previous state to detect changes
+                    old_is_on = self._state.is_on
+                    old_brightness = self._state.brightness
+                    
                     # Update state from device - this is now the source of truth
                     self._state.update_from_sync(bytearray(response))
                     _LOGGER.debug("State updated from device: is_on=%s, brightness=%s, color=%s", 
                                  self._state.is_on, self._state.brightness, self._state.color)
+                    
+                    # If state changed significantly, force UI update
+                    if (old_is_on != self._state.is_on or 
+                        abs(old_brightness - self._state.brightness) > 5):
+                        self.async_write_ha_state()
+                        
             except Exception as e:
                 _LOGGER.warning("Failed to update state: %s", e)
 
@@ -432,9 +464,7 @@ class WifiLedShopLight(LightEntity):
 
     @property
     def brightness(self):
-        # When light is off, brightness should be None per Home Assistant convention
-        if not self._state.is_on:
-            return None
+        # Return current brightness value - Home Assistant will handle display based on is_on
         return self._state.brightness
 
     @property
@@ -443,9 +473,7 @@ class WifiLedShopLight(LightEntity):
 
     @property
     def hs_color(self):
-        # When light is off, don't return color info
-        if not self._state.is_on:
-            return None
+        # Return current color - Home Assistant will handle display based on is_on
         r, g, b = self._state.color
         return color_util.color_RGB_to_hs(r, g, b)
 
