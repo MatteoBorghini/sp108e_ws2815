@@ -1,0 +1,23 @@
+{
+  "title": "SP108E WS2815 Controllore LED",
+  "config": {
+    "abort": {
+      "already_configured": "Questo controller è già configurato."
+    },
+    "error": {
+      "cannot_connect": "Impossibile raggiungere il dispositivo.",
+      "invalid_auth": "Autenticazione Invalida.",
+      "unknown": "Si è verificato un errore inaspettato."
+    },
+    "step": {
+      "user": {
+        "title": "Connetti il tuo controller SP108E",
+        "description": "Inserisci l'indirizzo IP del controllore e un nome familiare.",
+        "data": {
+          "host": "Indirizzo IP del controllore",
+          "name": "Nome"
+        }
+      }
+    }
+  }
+}
