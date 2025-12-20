@@ -124,6 +124,7 @@ class WifiLedShopLight(LightEntity):
                 response = self.send_command(Command.SYNC, [])
                 if response:
                     current_state = bool(bytearray(response)[StatePosition.IS_ON])
+                    _LOGGER.debug("Current state before toggle: %s, desired: %s", current_state, desired_state)
             except Exception as e:
                 _LOGGER.debug("Failed to get current state before toggle: %s", e)
                 # Assume opposite of desired state to force toggle
@@ -131,12 +132,17 @@ class WifiLedShopLight(LightEntity):
             
             # Only toggle if current state doesn't match desired state
             if current_state != desired_state:
+                _LOGGER.debug("Toggling light from %s to %s", current_state, desired_state)
                 self.send_command(Command.TOGGLE, [])
                 sleep(0.15)  # Give device time to process
                 # Update state optimistically
                 self._state.is_on = desired_state
+            else:
+                _LOGGER.debug("Light already in desired state %s, no toggle needed", desired_state)
+                self._state.is_on = desired_state
         else:
             # Just toggle once
+            _LOGGER.debug("Toggling light (no specific desired state)")
             self.send_command(Command.TOGGLE, [])
             sleep(0.1)
             # Toggle the known state
@@ -159,6 +165,9 @@ class WifiLedShopLight(LightEntity):
             # 2) If off, turn on first so subsequent commands are applied while on
             if not is_on:
                 await self._hass.async_add_executor_job(self._toggle_sync, True)
+                # Brief pause and sync to ensure state is correct after turning on
+                await asyncio.sleep(0.1)
+                await self._sync_state()
                 self.async_write_ha_state()
 
             # 3) Process all provided parameters
@@ -307,8 +316,11 @@ class WifiLedShopLight(LightEntity):
             # Turn off if it's on
             if is_on:
                 await self._hass.async_add_executor_job(self._toggle_sync, False)
+                # Brief pause and then sync to ensure state is correct
+                await asyncio.sleep(0.1)
+                await self._sync_state()
             
-            # Update state to reflect off
+            # Always update state to reflect off and notify Home Assistant
             self._state.is_on = False
             self.async_write_ha_state()
 
@@ -420,6 +432,9 @@ class WifiLedShopLight(LightEntity):
 
     @property
     def brightness(self):
+        # When light is off, brightness should be None per Home Assistant convention
+        if not self._state.is_on:
+            return None
         return self._state.brightness
 
     @property
@@ -428,6 +443,9 @@ class WifiLedShopLight(LightEntity):
 
     @property
     def hs_color(self):
+        # When light is off, don't return color info
+        if not self._state.is_on:
+            return None
         r, g, b = self._state.color
         return color_util.color_RGB_to_hs(r, g, b)
 
