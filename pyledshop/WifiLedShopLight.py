@@ -186,6 +186,13 @@ class WifiLedShopLight(LightEntity):
             # 2) If off, turn on first so subsequent commands are applied while on
             if not is_on:
                 await self._hass.async_add_executor_job(self._toggle_sync, None)
+                # # ? If no brightness was specified and the user is turning the light on,
+                # # ? restore the last known brightness (unless it was 0)
+                # if brightness_value is None and self._state.brightness > 0:
+                #     brightness_value = self._state.brightness
+                # elif brightness_value is None:
+                #     brightness_value = 255
+
                 # Brief pause and sync to ensure state is correct after turning on
                 # ! _sync_state should not be called here since is already been done by _toggle_sync.
                 # ! Re-doing it here only adds more lag to the HA write value and could end up in a concurrency state
@@ -475,8 +482,9 @@ class WifiLedShopLight(LightEntity):
 
     @property
     def brightness(self):
-        # Return current brightness value - Home Assistant will handle display based on is_on
-        return self._state.brightness
+        # ? Home Assistant expects None when the light is off to show 0% in the UI
+        # ? When the light is on, return the actual brightness value
+        return self._state.brightness if self._state.is_on else None
 
     @property
     def white_value(self):
