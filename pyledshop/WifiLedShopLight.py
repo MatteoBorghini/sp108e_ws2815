@@ -185,7 +185,7 @@ class WifiLedShopLight(LightEntity):
 
             # 2) If off, turn on first so subsequent commands are applied while on
             if not is_on:
-                await self._hass.async_add_executor_job(self._toggle_sync, None)
+                await self._hass.async_add_executor_job(self._toggle_sync, True)
                 # # ? If no brightness was specified and the user is turning the light on,
                 # # ? restore the last known brightness (unless it was 0)
                 # if brightness_value is None and self._state.brightness > 0:
@@ -341,29 +341,15 @@ class WifiLedShopLight(LightEntity):
             return
         
         async with self._command_lock:
-            # Get current state from device
-            await self._sync_state()
-            is_on = self._state.is_on
-            
-            # Turn off if it's on
-            if is_on:
+            # Optimistic update: Trust internal state to be responsive
+            if self._state.is_on:
+                # Send toggle command without waiting for state sync
+                # We use None to just toggle, avoiding extra reads in _toggle_sync
                 await self._hass.async_add_executor_job(self._toggle_sync, None)
-                # Brief pause and then sync to ensure state is correct
-                # ! _sync_state should not be called here since is already been done by _toggle_sync.
-                # ! Re-doing it here only adds more lag to the HA write value and could end up in a concurrency state
-                # await asyncio.sleep(0.1)
-                # await self._sync_state()
-                
-                # todo - Maybe this should be INSIDE the if statement. Investigate further
-                # Ensure state reflects off and notify Home Assistant immediately
+
+                # Optimistically update state to OFF immediately
                 self._state.is_on = False
-                self._state.brightness = None
                 self.async_write_ha_state()
-            
-            # Force another update to ensure UI is refreshed
-            # todo - WHY??? is there a valid reason I'm not seeing??
-            await asyncio.sleep(0.05)
-            self.async_write_ha_state()
 
     def set_segments(self, segments):
         self.send_command(Command.SET_SEGMENT_COUNT, [segments])
@@ -481,12 +467,8 @@ class WifiLedShopLight(LightEntity):
 
     @property
     def brightness(self):
-        # ? Home Assistant expects None when the light is off to show 0% in the UI
-        # ? When the light is on, return the actual brightness value
-        if self._state.is_on:
-            return self._state.brightness
-        else:
-            return None
+        # Home Assistant expects None when the light is off to show 0% in the UI
+        # When the light is on, return the actual brightness value
         return self._state.brightness if self._state.is_on else None
 
     @property
