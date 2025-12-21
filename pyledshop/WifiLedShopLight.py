@@ -482,7 +482,7 @@ class WifiLedShopLight(LightEntity):
     def brightness(self):
         # ? Home Assistant expects None when the light is off to show 0% in the UI
         # ? When the light is on, return the actual brightness value
-        return self._state.brightness if self._state.is_on else None
+        return self._state.brightness if self._state.is_on else 1
 
     @property
     def white_value(self):
