@@ -41,8 +41,8 @@ class WifiLedShopLight(LightEntity):
         self._command_lock = asyncio.Lock()  # Prevent concurrent commands
 
         self._attr_name = name
-        self._attr_supported_color_modes = {ColorMode.RGBW}
-        self._attr_color_mode = ColorMode.RGBW
+        self._attr_supported_color_modes = {ColorMode.RGB}
+        self._attr_color_mode = ColorMode.RGB
         self._attr_supported_features = LightEntityFeature.EFFECT
 
         # Try to get unique_id, but fall back to IP-based ID if connection fails
@@ -157,7 +157,7 @@ class WifiLedShopLight(LightEntity):
             # Just toggle once
             _LOGGER.debug("Toggling light (no specific desired state)")
             self.send_command(Command.TOGGLE, [])
-            sleep(0.1)
+            sleep(0.5)
             # Try to sync actual state
             try:
                 response = self.send_command(Command.SYNC, [])
@@ -431,11 +431,12 @@ class WifiLedShopLight(LightEntity):
                     _LOGGER.error(error_msg)
                     raise ConnectionError(error_msg) from e
 
-    def update(self):
-        """Update state from device (synchronous)."""
-        response = self.send_command(Command.SYNC, [])
-        if response:
-            self._state.update_from_sync(bytearray(response))
+    # ! Not used. can delete? 
+    # def update(self):
+    #     """Update state from device (synchronous)."""
+    #     response = self.send_command(Command.SYNC, [])
+    #     if response:
+    #         self._state.update_from_sync(bytearray(response))
 
     async def async_update(self):
         """Update state from device (async for Home Assistant)."""
@@ -444,9 +445,7 @@ class WifiLedShopLight(LightEntity):
             return
         async with self._update_lock:
             try:
-                response = await self._hass.async_add_executor_job(
-                    self.send_command, Command.SYNC, []
-                )
+                response = await self._hass.async_add_executor_job(self.send_command, Command.SYNC, [])
                 if response:
                     # Store previous state to detect changes
                     old_is_on = self._state.is_on
@@ -457,10 +456,9 @@ class WifiLedShopLight(LightEntity):
                     _LOGGER.debug("State updated from device: is_on=%s, brightness=%s, color=%s", self._state.is_on, self._state.brightness, self._state.color)
                     
                     # If state changed significantly, force UI update
-                    if (old_is_on != self._state.is_on or 
-                        abs(old_brightness - self._state.brightness) > 5):
+                    if (old_is_on != self._state.is_on or abs(old_brightness - self._state.brightness) > 5):
                         self.async_write_ha_state()
-                        
+
             except Exception as e:
                 _LOGGER.warning("Failed to update state: %s", e)
 
