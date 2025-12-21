@@ -353,11 +353,12 @@ class WifiLedShopLight(LightEntity):
                 # ! Re-doing it here only adds more lag to the HA write value and could end up in a concurrency state
                 # await asyncio.sleep(0.1)
                 # await self._sync_state()
-            
-            # todo - Maybe this should be INSIDE the if statement. Investigate further
-            # Ensure state reflects off and notify Home Assistant immediately
-            self._state.is_on = False
-            self.async_write_ha_state()
+                
+                # todo - Maybe this should be INSIDE the if statement. Investigate further
+                # Ensure state reflects off and notify Home Assistant immediately
+                self._state.is_on = False
+                self._state.brightness = None
+                self.async_write_ha_state()
             
             # Force another update to ensure UI is refreshed
             # todo - WHY??? is there a valid reason I'm not seeing??
@@ -482,7 +483,11 @@ class WifiLedShopLight(LightEntity):
     def brightness(self):
         # ? Home Assistant expects None when the light is off to show 0% in the UI
         # ? When the light is on, return the actual brightness value
-        return self._state.brightness if self._state.is_on else 1
+        if self._state.is_on:
+            return self._state.brightness
+        else:
+            return None
+        return self._state.brightness if self._state.is_on else None
 
     @property
     def white_value(self):
@@ -511,7 +516,7 @@ class WifiLedShopLight(LightEntity):
             "name": self._attr_name,
             "model": "sp108e",
         }
-  
+
     @property
     def extra_state_attributes(self):
         r, g, b = self._state.color
