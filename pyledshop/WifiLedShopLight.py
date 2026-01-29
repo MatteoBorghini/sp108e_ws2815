@@ -1,6 +1,6 @@
 import socket
 import logging
-from time import sleep
+from time import sleep, time
 
 # Driver imports
 from .effects import MONO_EFFECTS, PRESET_EFFECTS
@@ -30,6 +30,13 @@ class WifiLedShopLight:
 
         # Internal state (! limited to the driver. Does not always match with HA !)
         self._state = WifiLedShopLightState()
+
+        # Cooldown Bail
+        # This cooldown is set to ignore every updated coming from the controller for X seconds.
+        # Turns out that with the HA device type set to 'local_pol' after every state change HA calls for a sync_state
+        # This means that even if i don't call for sync_state after a TOGGLE or after brg change HA will. This bastard...
+        # This time bail helps to return to HA with ONLY a optimistic value before X seconds to give time to this piece of shit of a controller to update
+        self._ignore_sync_until = 0
 
         # Moved to light.py - Leave it here as light.py maybe need to use the LightEntityFeature consts
         # self._attr_name = name
@@ -108,6 +115,7 @@ class WifiLedShopLight:
             # Verify with sync after a short delay
             # sleep(1.0) # <-- This behavior can be dangerous since it hang the HA thread for a full sec. If it does not work even with a full sec i will remove the sync entirely and go only with optimistic + HA polling
             # self.sync_state()
+            self._ignore_sync_until = time() + 1.5 # <-- Look at declaration to know why this is here
 
     def turn_off(self):
         if self._state.is_on:
@@ -115,6 +123,7 @@ class WifiLedShopLight:
             self.send_command(Command.TOGGLE, [])
             # Optimistic update
             self._state.is_on = False
+            self._ignore_sync_until = time() + 1.5 # <-- Look at declaration to know why this is here
 
     def set_rgb(self, rgb_tuple):
         """Send the RGB color (0-255, 0-255, 0-255)"""
@@ -129,6 +138,9 @@ class WifiLedShopLight:
         # Setting a static color usually implies switching to Solid mode
         self._state.mode = MONO_EFFECTS["Solid (custom color)"]
 
+        self._ignore_sync_until = time() + 1.5 # <-- Look at declaration to know why this is here
+
+
     def set_brightness(self, brightness):
         """Set brightness 0-255"""
         brightness = clamp(brightness)
@@ -136,6 +148,9 @@ class WifiLedShopLight:
         _LOGGER.debug("Stting brightness to %s for %s", brightness, self._ip)
         self.send_command(Command.SET_BRIGHTNESS, [brightness])
         self._state.brightness = brightness
+
+        self._ignore_sync_until = time() + 1.5 # <-- Look at declaration to know why this is here
+
 
     def set_white(self, white):
         white = clamp(white)
@@ -164,6 +179,10 @@ class WifiLedShopLight:
 
     def sync_state(self):
         """Query the device for its status and update internal state."""
+        if time() < self._ignore_sync_until:
+            _LOGGER.debug("Synced state from device %s: %S", self._ip, self._state)
+            return
+        
         try:
             response = self.send_command(Command.SYNC, [])
             if response:
