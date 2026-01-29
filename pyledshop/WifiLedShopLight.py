@@ -104,9 +104,10 @@ class WifiLedShopLight:
             self.send_command(Command.TOGGLE, [])
             # Optimistic update
             self._state.is_on = True
+            # I quit.... the controller won.... wont sync the state to HA after a TOGGLE. Will be up to HA to update the state of the entity in case of failed TOGGLE command. 
             # Verify with sync after a short delay
-            sleep(1.0) # <-- This behavior can be dangerous since it hang the HA thread for a full sec. If it does not work even with a full sec i will remove the sync entirely and go only with optimistic + HA polling
-            self.sync_state()
+            # sleep(1.0) # <-- This behavior can be dangerous since it hang the HA thread for a full sec. If it does not work even with a full sec i will remove the sync entirely and go only with optimistic + HA polling
+            # self.sync_state()
 
     def turn_off(self):
         if self._state.is_on:
