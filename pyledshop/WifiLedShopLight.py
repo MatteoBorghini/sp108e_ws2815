@@ -105,7 +105,7 @@ class WifiLedShopLight:
             # Optimistic update
             self._state.is_on = True
             # Verify with sync after a short delay
-            sleep(0.1)
+            sleep(1.0) # <-- This behavior can be dangerous since it hang the HA thread for a full sec. If it does not work even with a full sec i will remove the sync entirely and go only with optimistic + HA polling
             self.sync_state()
 
     def turn_off(self):
