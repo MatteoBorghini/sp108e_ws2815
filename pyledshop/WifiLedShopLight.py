@@ -180,7 +180,7 @@ class WifiLedShopLight:
     def sync_state(self):
         """Query the device for its status and update internal state."""
         if time() < self._ignore_sync_until:
-            _LOGGER.debug("Synced state from device %s: %S", self._ip, self._state)
+            _LOGGER.debug("Skipping sync for %s: waiting for hardware to catch up", self._ip)
             return
         
         try:
