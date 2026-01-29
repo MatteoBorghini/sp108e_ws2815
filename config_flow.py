@@ -15,7 +15,7 @@ from homeassistant.const import CONF_HOST, CONF_NAME
 
 # Internal imports
 from .const import DOMAIN
-from .pyledshop import WifiLedShopLight
+# from .pyledshop import WifiLedShopLight
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,33 +42,12 @@ async def validate_input(hass: core.HomeAssistant, user_input: dict) -> dict:
 
     # If the data passes the validation check, return it to HA
     return {
-        "title": user_input[CONF_NAME],
+        "title": user_input[CONF_NAME], # <-- for now i leave this here for compatibility with the light.py. Should be removed since it's redundant to the HA one
+        CONF_NAME: user_input[CONF_NAME],
         CONF_HOST: host,
         "effect": "Solid (custom color)",
         "speed": 255
-    } 
-
-    # try:
-    #     config = {
-    #         "effect": user_input.get("effect", "Solid (custom color)"),
-    #         "speed": user_input.get("speed", 255),
-    #     }
-    #     light = await hass.async_add_executor_job(
-    #         WifiLedShopLight, user_input["host"], user_input["name"], config
-    #     )
-    #     await hass.async_add_executor_job(light.update)
-    # except ConnectionError as e:
-    #     _LOGGER.error("Failed to connect to SP108E controller at %s: %s", user_input["host"], str(e))
-    #     raise CannotConnect(str(e)) from e
-    # except Exception as e:
-    #     _LOGGER.exception("Failed to connect to SP108E controller at %s", user_input["host"])
-    #     raise CannotConnect(f"Connection failed: {str(e)}") from e
-
-    # return {
-    #     "title": user_input["name"],
-    #     "effect": user_input["effect"],
-    #     "speed": user_input["speed"],
-    # }
+    }
 
 # The 'timeout' is completely casual. i don't know yet if it's right
 def _test_tcp_connection(host: str, port: int, timeout: int = 3) -> None:
