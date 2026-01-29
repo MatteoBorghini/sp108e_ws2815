@@ -124,3 +124,9 @@ class SP108ELight(LightEntity):
         """Turn off the light."""
         await self.hass.async_add_executor_job(self._driver.turn_off)
         self.async_write_ha_state()
+    
+    async def async_update(self) -> None:
+        """Fetch new state data for this light via polling."""
+        # This method will be called from HA automatically (every 30s depending on Host settings)
+        # Here should be safe to do a sync because we are not binding it to a controller TOGGLE command
+        await self.hass.async_add_executor_job(self._driver.sync_state)
