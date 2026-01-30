@@ -130,6 +130,12 @@ class WifiLedShopLight:
         r, g, b = rgb_tuple
         r, g, b = clamp(r), clamp(g), clamp(b)
 
+        # Check if the controller is ON before setting the brightness
+        # If the controller is OFF while setting a new brightness value then turn it ON first
+        # ! Strange behavior... this should be delegated to HA. I should not be doing this by hand... weird
+        if not self._state.is_on:
+            self.send_command(Command.TOGGLE)
+
         _LOGGER.debug("Setting RGB to %s form %s", (r, g, b), self._ip)
         self.send_command(Command.SET_COLOR, [r, g, b])
 
@@ -144,6 +150,12 @@ class WifiLedShopLight:
     def set_brightness(self, brightness):
         """Set brightness 0-255"""
         brightness = clamp(brightness)
+
+        # Check if the controller is ON before setting the brightness
+        # If the controller is OFF while setting a new brightness value then turn it ON first
+        # ! Strange behavior... this should be delegated to HA. I should not be doing this by hand... weird
+        if not self._state.is_on:
+            self.send_command(Command.TOGGLE)
 
         _LOGGER.debug("Stting brightness to %s for %s", brightness, self._ip)
         self.send_command(Command.SET_BRIGHTNESS, [brightness])
