@@ -3,6 +3,9 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/MatteoBorghini/sp108e_ws2815/graphs/commit-activity)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-Integration-blue)](https://www.home-assistant.io/)
+[![Python](https://img.shields.io/badge/Language-Python-blue)](https://www.python.org/)
+[![Hardware](https://img.shields.io/badge/Hardware-SP108E-red)](https://www.amazon.com/s?k=SP108E)
+
 
 A modern, fully asynchronous Home Assistant integration for controlling **SP108E-based Wi-Fi LED controllers**.
 
@@ -72,7 +75,11 @@ The easiest way to install and keep this integration updated.
 4.  Enter the details:
     *   **Host:** The IP address of your controller (e.g., `192.168.1.50`).
     *   **Name:** A friendly name for the device (e.g., `Living Room LEDs`).
-5.  The integration will test values and connect automatically.
+    *   **Effect Name:** The default effect to play on startup. 
+    *   **Effect Speed:** The speed of the effect animation (0-255).
+    *   **Number of Segments:** The number of LED segments to control. (Same as 'LED Shop' App setting)
+    *   **Number of LEDs per Segment:** The number of LEDs in each segment. Used to calculate total LEDs for animation effects.
+5.  The integration will test values throw a TCP socket and connect automatically.
 
 ### changing Options
 
@@ -80,9 +87,12 @@ You can adjust specific settings after installation:
 
 1.  Go to the device page in HA.
 2.  Click **Configure**.
-3.  Here you can define:
-    *   **Default Effect:** The effect to play when turned on via automation.
-    *   **Default Speed:** The animation speed (0-255).
+3.  Here you can change:
+    *  **Number of Segments:** Update the number of LED segments.
+    *  **Number of LEDs per Segment:** Update the number of LEDs in each segment.
+    *  **Effect Name:** Change the default effect.
+    *  **Effect Speed:** Change the default animation speed.
+  
 
 ---
 
@@ -93,14 +103,18 @@ The integration uses a TCP handshake validation on **Port 8189**.
 1.  Ensure your SP108E is powered on.
 2.  Ensure it is connected to the same network as Home Assistant.
 3.  Verify the IP address is correct.
+4.  If you are seeing problems with effect/effect speed not applying, double-check the "Number of Segments" and "Number of LEDs per Segment" settings match your physical setup.
+5.  If problem persists, try opening an issue
+   
+> **⚠️ Note:** If your firewall blocks outgoing connections, you may need to allow traffic on port **8189**.
 
 **Entities unresponsive:**
 SP108E controllers can handle only limited concurrent connections. If you have the official mobile app open at the same time as Home Assistant, commands may be dropped. Close the mobile app to ensure stability.
 
 ---
 
-## 🙌 Credits & Acknowledgments
-
+## 🙌 Credits & Acknowledgments 
+*   **Development:** Created by [Sam Stein](https://github.com/samhstein) Refactored and Maintained by [Matteo Borghini](https://github.com/MatteoBorghini)
 *   **Logic Core:** Powered by the [pyledshop](https://github.com/kylezimmerman/pyledshop) library by @kylezimmerman.
 *   **Inspirations:** Standardized structure based on modern HA custom component guidelines.
 
