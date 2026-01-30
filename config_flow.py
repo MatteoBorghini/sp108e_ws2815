@@ -19,12 +19,15 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-STEP_USER_DATA_SCHEMA = vol.Schema({
-    vol.Required(CONF_HOST): str,
-    vol.Required(CONF_NAME): str,
-    # vol.Optional("effect", default="Solid (custom color)"): str,
-    # vol.Optional("speed", default=255): vol.All(vol.Coerce(int), vol.Clamp(min=0, max=255)),
-})
+def _get_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Helper to get the schema with optional defaults."""
+    defaults = defaults or {}
+    return vol.Schema({
+        vol.Required(CONF_HOST, default=defaults.get(CONF_HOST)): str,
+        vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "SP108E Controller")): str,
+        # vol.Optional("effect", default="Solid (custom color)"): str,
+        # vol.Optional("speed", default=255): vol.All(vol.Coerce(int), vol.Clamp(min=0, max=255)),
+    })
 
 
 async def validate_input(hass: core.HomeAssistant, user_input: dict) -> dict:
@@ -63,8 +66,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
+    # =========================================================================
+    # 1. INITIAL SETUP
+    # =========================================================================
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
+        # This should fix the python type check. È una porcata
+        assert self.hass is not None
+
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -82,14 +91,50 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=STEP_USER_DATA_SCHEMA,
+            data_schema=_get_schema(),
             errors=errors
         )
 
+    # =========================================================================
+    # 2. RECONFIGURE FLOW (Change IP)
+    # =========================================================================
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle the reconfiguration flow for an existing entry."""
+        # This should fix the python type check. È una porcata
+        assert self.hass is not None
+
+        # Get the entry to edit
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        
+        if not entry:
+            return self.async_abort(reason="entry_missing")
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                info = await validate_input(self.hass, user_input)
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected exeption during reconfigure. Revert back to old configs")
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data={**entry.data, **info},
+                    title=info[CONF_NAME]
+                )
+        
+        # Populate the HA form with "default" data
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_get_schema(defaults=entry.data),
+            errors=errors
+        )
 
 class CannotConnect(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
-    
     def __init__(self, message="Failed to connect to the device"):
         super().__init__(message)
         self.message = message
