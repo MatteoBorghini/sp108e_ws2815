@@ -48,6 +48,7 @@ class SP108ELight(LightEntity):
     """Modern implementation of SP108E light"""
 
     _attr_has_entity_name = True
+    _attr_icon = "mdi:led-strip-variant"
     _attr_supported_color_modes = {ColorMode.RGB}
     _attr_color_mode = ColorMode.RGB
     _attr_supported_features = LightEntityFeature.EFFECT
@@ -93,6 +94,13 @@ class SP108ELight(LightEntity):
     def effect(self) -> str | None:
         """Return the current effect."""
         return self._driver.effect
+    
+    @property
+    def icon(self) -> str:
+        """Return the icon of the light based on state."""
+        if self.is_on:
+            return "mdi:led-strip-variant"
+        return "mdi:led-strip-variant-off"
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""
