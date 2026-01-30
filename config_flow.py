@@ -14,7 +14,17 @@ from homeassistant.const import CONF_HOST, CONF_NAME
 # from homeassistant.data_entry_flow import FlowResult
 
 # Internal imports
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    CONF_SEGMENTS,
+    CONF_LEDS_PER_SEGMENT,
+    CONF_EFFECT_NAME,
+    CONF_EFFECT_SPEED,
+    DEFAULT_SEGMENTS,
+    DEFAULT_LEDS_PER_SEGMENT,
+    DEFAULT_EFFECT_NAME,
+    DEFAULT_EFFECT_SPEED,
+    )
 # from .pyledshop import WifiLedShopLight
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,8 +35,10 @@ def _get_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     return vol.Schema({
         vol.Required(CONF_HOST, default=defaults.get(CONF_HOST)): str,
         vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "SP108E Controller")): str,
-        # vol.Optional("effect", default="Solid (custom color)"): str,
-        # vol.Optional("speed", default=255): vol.All(vol.Coerce(int), vol.Clamp(min=0, max=255)),
+        vol.Required(CONF_SEGMENTS, default=defaults.get(CONF_SEGMENTS, DEFAULT_SEGMENTS)): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+        vol.Required(CONF_LEDS_PER_SEGMENT, default=defaults.get(CONF_LEDS_PER_SEGMENT, DEFAULT_LEDS_PER_SEGMENT)): vol.All(vol.Coerce(int), vol.Range(min=1, max=1024)),
+        vol.Required(CONF_EFFECT_NAME, default=defaults.get(CONF_EFFECT_NAME, DEFAULT_EFFECT_NAME)): str,
+        vol.Required(CONF_EFFECT_SPEED, default=defaults.get(CONF_EFFECT_SPEED, DEFAULT_EFFECT_SPEED)): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
     })
 
 
@@ -48,8 +60,10 @@ async def validate_input(hass: core.HomeAssistant, user_input: dict) -> dict:
         "title": user_input[CONF_NAME], # <-- for now i leave this here for compatibility with the light.py. Should be removed since it's redundant to the HA one
         CONF_NAME: user_input[CONF_NAME],
         CONF_HOST: host,
-        "effect": "Solid (custom color)",
-        "speed": 255
+        CONF_SEGMENTS: user_input[CONF_SEGMENTS],
+        CONF_LEDS_PER_SEGMENT: user_input[CONF_LEDS_PER_SEGMENT],
+        CONF_EFFECT_NAME: user_input[CONF_EFFECT_NAME],
+        CONF_EFFECT_SPEED: user_input[CONF_EFFECT_SPEED],
     }
 
 # The 'timeout' is completely casual. i don't know yet if it's right

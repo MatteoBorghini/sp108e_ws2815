@@ -8,6 +8,17 @@ from .constants import Command, CommandFlag, StatePosition
 from .utils import clamp
 from .WifiLedShopLightState import WifiLedShopLightState
 
+from ..const import (
+    CONF_SEGMENTS,
+    CONF_LEDS_PER_SEGMENT,
+    CONF_EFFECT_NAME,
+    CONF_EFFECT_SPEED,
+    DEFAULT_SEGMENTS,
+    DEFAULT_LEDS_PER_SEGMENT,
+    DEFAULT_EFFECT_NAME,
+    DEFAULT_EFFECT_SPEED,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
 class WifiLedShopLight:
@@ -25,8 +36,10 @@ class WifiLedShopLight:
         self._name = name
 
         # Config
-        self._default_effect = config.get("effect", "Solid (custom color)")
-        self._default_speed = config.get("speed", 255)
+        self._segments = config.get(CONF_SEGMENTS, DEFAULT_SEGMENTS)
+        self._leds_per_segment = config.get(CONF_LEDS_PER_SEGMENT, DEFAULT_LEDS_PER_SEGMENT)
+        self._effect_name = config.get(CONF_EFFECT_NAME, DEFAULT_EFFECT_NAME)
+        self._effect_speed = config.get(CONF_EFFECT_SPEED, DEFAULT_EFFECT_SPEED)
 
         # Internal state (! limited to the driver. Does not always match with HA !)
         self._state = WifiLedShopLightState()
@@ -48,6 +61,14 @@ class WifiLedShopLight:
         
         # Perform an initial sync to get the real state of the device
         self.sync_state()
+
+        # Set the configured default effect and effect speed
+        self.set_effect(self._effect_name)
+        self.set_speed(self._effect_speed)
+
+        # Set the configured segment count and led x segment matrix to the controller
+        self.set_segment(self._segments)
+        self.set_lights_per_segment(self._leds_per_segment)
 
     def __repr__(self):
         return f"<WifiLedShopLight IP={self._ip} Port={self._port}>"
